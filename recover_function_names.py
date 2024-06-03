@@ -1,9 +1,6 @@
-#Recover function names in stripped Go binaries.
-#@author aidanfora | Malware Analysis Intern @ CSIT
-#@category Go Decompilation Scripts
-#@keybinding 
-#@menupath 
-#@toolbar 
+# Recover function names in stripped Go binaries.
+# @author aidanfora | Malware Analysis Intern @ CSIT
+# @category Go Decompilation Scripts
 
 from ghidra.program.model.symbol.SourceType import *
 
@@ -32,13 +29,13 @@ def is_pclntab(address):
     return pc_quantum in [1, 2, 4] and pointer_size in [4, 8]
 
 # Find the gopclntab section in Linux ELF files and MacOS Mach-O files
-def get_gopclntab():
+def find_gopclntab():
     for block in getMemoryBlocks():
         if block.getName() == '.gopclntab' or block.getName() == '__gopclntab':
-            start = block.getStart()
-            end = block.getEnd()
-            print '%s: [Start Address: 0x%x | End Address: 0x%x]' % (block.getName(), start.getOffset(), end.getOffset())
-            return start
+            start_address = block.getStart()
+            end_address = block.getEnd()
+            print '%s: [Start Address: 0x%x | End Address: 0x%x]' % (block.getName(), start_address.getOffset(), end_address.getOffset())
+            return start_address
     print 'No gopclntab found.'
     return None
 
@@ -63,49 +60,49 @@ def rename_func(start, version):
     }
     
     Some clarifications to the naming conventions:
-        funcnametab: holds the starting address pointed to by the funcnameOffset (which also contains the strings of functions)
-        functab: holds the starting memory address pointed to by the pclnOffset
+        funcnametab: holds the starting address pointed to by the funcnameOffset (which contains the strings of function names)
+        pclntab: holds the starting memory address pointed to by the pclnOffset (which contains pointers to the actual functions)
     '''
     ptrsize = getByte(start.add(7))
     
     if version == '1.2':
         if ptrsize == 8:
-            nfunctab = getLong(start.add(8))
+            npclntab = getLong(start.add(8))
         else:
-            nfunctab = getInt(start.add(8))
-        functab = start.add(8 + ptrsize)
+            npclntab = getInt(start.add(8))
+        pclntab = start.add(8 + ptrsize)
 
     elif version == '1.16':
         if ptrsize == 8:
-            nfunctab = getLong(start.add(8))
+            npclntab = getLong(start.add(8))
             offset = getLong(start.add(8 + 2*ptrsize))
             funcnametab = start.add(offset)
             offset = getLong(start.add(8 + 6*ptrsize))
         else:
-            nfunctab = getInt(start.add(8))
+            npclntab = getInt(start.add(8))
             offset = getInt(start.add(8 + 2*ptrsize))
             funcnametab = start.add(offset)
             offset = getInt(start.add(8 + 6*ptrsize))
-        functab = start.add(offset)
+        pclntab = start.add(offset)
 
     elif version == '1.18':
         if ptrsize == 8:
-            nfunctab = getLong(start.add(8))
+            npclntab = getLong(start.add(8))
             textStart = getLong(start.add(8 + 2*ptrsize))
             offset = getLong(start.add(8 + 3*ptrsize))
             funcnametab = start.add(offset)
             offset = getLong(start.add(8 + 7*ptrsize))
         else:
-            nfunctab = getInt(start.add(8))
+            npclntab = getInt(start.add(8))
             textStart = getInt(start.add(8 + 2*ptrsize))
             offset = getInt(start.add(8 + 3*ptrsize))
             funcnametab = start.add(offset)
             offset = getInt(start.add(8 + 7*ptrsize))
-        functab = start.add(offset)
-        functabFieldSize = 4
+        pclntab = start.add(offset)
+        pclntabFieldSize = 4
     
-    p = functab
-    for i in range(nfunctab):
+    p = pclntab
+    for i in range(npclntab):
         if version == '1.2' or version == '1.16':
             if ptrsize == 8:
                 func_address = currentProgram.getAddressFactory().getAddress(hex(getLong(p)).rstrip("L"))
@@ -120,10 +117,10 @@ def rename_func(start, version):
             name_address = start.add(getInt(name_pointer))
         else:  # version == '1.18'
             func_address = currentProgram.getAddressFactory().getAddress(hex(getInt(p) + textStart).rstrip("L"))
-            p = p.add(functabFieldSize)
+            p = p.add(pclntabFieldSize)
             data_offset = getInt(p)
-            p = p.add(functabFieldSize)
-            name_pointer = functab.add(data_offset + functabFieldSize)
+            p = p.add(pclntabFieldSize)
+            name_pointer = pclntab.add(data_offset + pclntabFieldSize)
             name_address = funcnametab.add(getInt(name_pointer))
         
         func_name = getDataAt(name_address)
@@ -133,7 +130,7 @@ def rename_func(start, version):
             try:
                 func_name = createAsciiString(name_address)
             except:
-                print("ERROR: No name")
+                print('ERROR: No name')
                 continue
         
         func = getFunctionAt(func_address)
@@ -155,7 +152,7 @@ def main():
         if executable_format == 'Portable Executable (PE)':
             start = find_gopclntab_pe()
         else:
-            start = get_gopclntab()
+            start = find_gopclntab()
     else:
         print 'Incorrect file format.'
 
