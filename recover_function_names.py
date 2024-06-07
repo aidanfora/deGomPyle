@@ -148,7 +148,7 @@ def main():
     start = None
     
     if executable_format in ['Portable Executable (PE)', 'Mac OS X Mach-O', 'Executable and Linking Format (ELF)']:
-        print '%s file found, trying to find gopclntab...'
+        print '%s file found, trying to find gopclntab...' % executable_format
         if executable_format == 'Portable Executable (PE)':
             start = find_gopclntab_pe()
         else:

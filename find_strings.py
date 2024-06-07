@@ -2,17 +2,15 @@
 # @author aidanfora | Malware Analysis Intern @ CSIT
 # @category Go Decompilation Scripts
 
-
 from ghidra.program.model.lang import OperandType
-
 
 '''
 Format:
 LEA RAX, [Address]
 MOV EBX, (length)
-Works for fmt.Printf()
+Works for dynamic strings
 '''
-def find_strings_printf():
+def find_strings_dynamic():
     for block in getMemoryBlocks():
         block_name = block.getName()
 
@@ -54,7 +52,7 @@ def find_strings_printf():
                 instruction = getInstructionAfter(instruction)
                 continue
             '''
-            Heuristic Passed! Most likely some form of string
+            Heuristic Passed! Most likely some form of dynamically allocated string
             '''
             address = instruction.getPrimaryReference(1).getToAddress()
             length = instruction_two.getOpObjects(1)[0].getValue()          # Position 1 refers to Scalar
@@ -73,9 +71,9 @@ def find_strings_printf():
 Format:
 LEA RDX/RSI/R8, [Pointer_Address]
 MOV qword ptr [Stack Position], RDX/RSI/R8
-Works for fmt.Println()
+Works for static strings
 '''
-def find_strings_println():
+def find_strings_static():
     for block in getMemoryBlocks():
         block_name = block.getName()
 
@@ -122,7 +120,7 @@ def find_strings_println():
                 instruction = getInstructionAfter(instruction)
                 continue
             '''
-            Heuristic Passed! Most likely some form of println string
+            Heuristic Passed! Most likely some form of statically allocated string
             '''
             pointed_address = instruction.getPrimaryReference(1).getToAddress()
             address = getDataAt(pointed_address).getValue()
@@ -139,6 +137,6 @@ def find_strings_println():
 
             instruction = getInstructionAfter(instruction)
 
-find_strings_printf()
-find_strings_println()
+find_strings_dynamic()
+find_strings_static()
 print('Strings Renamed!')
