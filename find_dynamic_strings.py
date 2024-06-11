@@ -1,16 +1,15 @@
-# Recover string names from large string blobs in Go binaries.
+# Recover dynamically allocated string names from large string blobs in Go binaries.
 # @author aidanfora | Malware Analysis Intern @ CSIT
 # @category Go Decompilation Scripts
 
 from ghidra.program.model.lang import OperandType
 
 '''
-Format:
+Format for Go >= 1.18:
 LEA RAX, [Address]
 MOV EBX, (length)
-Works for dynamic strings
 '''
-def find_strings_dynamic():
+def find_dynamic_strings_118():
     for block in getMemoryBlocks():
         block_name = block.getName()
 
@@ -68,12 +67,12 @@ def find_strings_dynamic():
             instruction = getInstructionAfter(instruction)
 
 '''
-Format:
-LEA RDX/RSI/R8, [Pointer_Address]
-MOV qword ptr [Stack Position], RDX/RSI/R8
-Works for static strings
+Format for Go 1.16-1.17:
+LEA RAX, [Address]
+MOV qword ptr [Stack Position], RAX
+MOV qword ptr [Stack Position], (length)
 '''
-def find_strings_static():
+def find_dynamic_strings_116():
     for block in getMemoryBlocks():
         block_name = block.getName()
 
@@ -87,45 +86,59 @@ def find_strings_static():
 
         while instruction:
             '''
-            First Check: LEA RAX, [Pointer_Address]
-            1. The first index should be the RSI/R8 register
-            2. The second index should be a pointer to some memory address
+            First Check: LEA RAX, [Address]
+            1. The first index should be the RAX register (or some register)
+            2. The second index should be a memory address
             3. The instruction's mnemonic should be LEA
             '''
             register = instruction.getRegister(0)
-            reference_check = instruction.getPrimaryReference(1)
-            if reference_check != None:
-                is_ptr = getDataAt(reference_check.getToAddress())
-            else:
-                instruction = getInstructionAfter(instruction)
-                continue
+            operand_type = instruction.getOperandType(1)
             mnemonic = instruction.getMnemonicString()
 
-            if register is None or is_ptr == None or is_ptr.isPointer() == False or mnemonic != 'LEA':
+            if (register is None or 
+                OperandType.isAddress(operand_type) is False or 
+                mnemonic != 'LEA'):
                 instruction = getInstructionAfter(instruction)
                 continue
             
             instruction_two = getInstructionAfter(instruction)
             original_register = register
+
             '''
             Second Check: MOV qword ptr [Stack Position], RSI/R8
-            1. The first index should be the memory address with reference to RSP
+            1. The first index should be the memory address with reference to RSP/ESP
             2. The second index should be the RSI/R8 register (must be same as the original register that LEA was used on!)
             3. The instruction's mnemonic should be MOV
             '''
             register = instruction_two.getRegister(1)
             is_rsp = instruction_two.getOpObjects(0)
             mnemonic = instruction_two.getMnemonicString()
-            if register is None or register.getName() != original_register.getName() or is_rsp == [] or is_rsp[0].toString() != 'RSP' or mnemonic != 'MOV':
+
+            if (len(is_rsp) == 0 or is_rsp[0].toString() not in ['RSP', 'ESP'] or 
+                register is None or register.getName() != original_register.getName() or 
+                mnemonic != 'MOV'):
                 instruction = getInstructionAfter(instruction)
                 continue
+
+            instruction_three = getInstructionAfter(instruction_two)
+
             '''
-            Heuristic Passed! Most likely some form of statically allocated string
+            Third Check: MOV qword ptr [Stack Position], (length))
+            1. The first index should be the memory address with reference to RSP/ESP
+            2. The second index should be scalar-valued length
+            3. The instruction's mnemonic should be MOV
             '''
-            pointed_address = instruction.getPrimaryReference(1).getToAddress()
-            address = getDataAt(pointed_address).getValue()
-            length_address = pointed_address.add(8)
-            length = getByte(length_address)
+            operand_type = instruction_three.getOperandType(1)
+            is_rsp = instruction_three.getOpObjects(0)
+            mnemonic = instruction_three.getMnemonicString()
+
+            if OperandType.isScalar(operand_type) is False or is_rsp == [] or is_rsp[0].toString() not in ['RSP', 'ESP'] or mnemonic != 'MOV':
+                instruction = getInstructionAfter(instruction)
+                continue
+
+            # Heuristic Passed! Most likely some form of dynamically allocated string
+            address = instruction.getPrimaryReference(1).getToAddress()
+            length = instruction_three.getOpObjects(1)[0].getValue()          
 
             try:
                 ascii_string = createAsciiString(address, length)
@@ -137,6 +150,6 @@ def find_strings_static():
 
             instruction = getInstructionAfter(instruction)
 
-find_strings_dynamic()
-find_strings_static()
-print('Strings Renamed!')
+find_dynamic_strings_118()
+find_dynamic_strings_116()
+print('Dynamic Strings Renamed!')
