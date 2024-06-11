@@ -1,3 +1,7 @@
+# This is not a Ghidra Python script!
+# This is a PoC to showcase how malware developers may obfuscate their Go binaries
+# by overriding the data in the function name table
+
 import random
 import struct
 import pefile
