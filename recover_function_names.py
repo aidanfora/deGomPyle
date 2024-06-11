@@ -130,7 +130,7 @@ def rename_func(start, version):
             try:
                 func_name = createAsciiString(name_address)
             except:
-                print('ERROR: No name')
+                print('Error: No name')
                 continue
         
         func = getFunctionAt(func_address)
@@ -165,7 +165,7 @@ def main():
         elif magic == 0xfffffffb:
             rename_func(start, '1.2')
         else:
-            print 'WARNING: Unknown .gopclntab magic, assuming Go 1.18 compatibility'
+            print 'Go Version could not be determined, assuming Go 1.18 compatibility'
             rename_func(start, '1.18')
 
 main()
